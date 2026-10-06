@@ -266,7 +266,7 @@ function evaluate(names,c,gc){
  const hitP=1-c.eva*(1-s.ignEva), drE=c.dr*(1-s.ignDr), cP=Math.min(1,s.critP), critAvg=1+cP*(s.critM-1);
  const rangeMul=1+s.range*c.rangeVal;
  const en=Array.from({length:1+c.nb},()=>({hp:c.H,q:[0,0,0],dl:0,dw:0,fresh:true,dead:false}));
- let rage=2,skills=0,kills=0,firstKill=null,bonusAtk=0,primDmg=0,splashDmg=0,delayed=0,raw=0;
+ let rage=2,skills=0,kills=0,firstKill=null,bonusAtk=0,primDmg=0,splashDmg=0,delayed=0,raw=0,endT=c.T;
  const hit=(e,x,w,isPrim)=>{ // one damage instance on enemy e, expected weight w
   if(w<=0||x<=0)return;
   const now=gc?Math.min(x,c.cap):x, ex=x-now;
@@ -305,6 +305,7 @@ function evaluate(names,c,gc){
   en.forEach(e=>{if(e.dead)return;e.hp-=e.q[1];e.q=[0,e.q[2],0]});
   rage+=s.rageHit;
   en.forEach((e,i)=>{const d=Math.max(0,before[i]-Math.max(0,e.hp));if(e===P)primDmg+=d;else splashDmg+=d});
+  const aliveHp=en.reduce((a,e,i)=>a+(e.dead?0:before[i]),0), turnRaw=en.reduce((a,e,i)=>a+(e.dead?0:before[i]-e.hp),0);
   // deaths (target can be executed by 혈적자)
   let chain=true;
   while(chain){chain=false;
@@ -312,15 +313,16 @@ function evaluate(names,c,gc){
     if(e.hp<=thr){if(e.hp>0){if(e===P)primDmg+=e.hp;else splashDmg+=e.hp}
      e.dead=true;e.hp=0;kills++;bonusAtk+=s.killAtk;if(firstKill==null)firstKill=t+1;
      if(s.thorn){const atk=atkNow(t);en.filter(o=>!o.dead).slice(0,8).forEach(o=>{const b=o.hp;hit(o,s.thorn*atk,1);splashDmg+=Math.max(0,b-Math.max(0,o.hp))});chain=true}}})}
+  if(!en.some(e=>!e.dead)){endT=t+Math.min(1,aliveHp/Math.max(1e-9,turnRaw));break}
  }
- return {names,total:primDmg+splashDmg,prim:primDmg,splash:splashDmg,kills,firstKill,skills,delayed:delayed/Math.max(1e-9,raw),flags:[...new Set(s.flags)]};
+ return {names,rate:(primDmg+splashDmg)/endT,endT,total:primDmg+splashDmg,prim:primDmg,splash:splashDmg,kills,firstKill,skills,delayed:delayed/Math.max(1e-9,raw),flags:[...new Set(s.flags)]};
 }
 
 const pairs=a=>{const o=[];for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++)o.push([a[i],a[j]]);return o};
 
 // gold mode: 0 없음, 1 있음, 2 둘 다(평균)
 function evalMode(names,c){
- if(gold===2){const a=evaluate(names,c,false),b=evaluate(names,c,true);return {...b,total:(a.total+b.total)/2,totA:a.total,totB:b.total}}
+ if(gold===2){const a=evaluate(names,c,false),b=evaluate(names,c,true);return {...b,rate:(a.rate+b.rate)/2,rateA:a.rate,rateB:b.rate}}
  return evaluate(names,c,gold===1);
 }
 
@@ -334,10 +336,10 @@ function run(){
 
  if(tab==="solo"){
   $("tabNote").textContent=`장비 1개만 단 쇠뇌가 ${c.T}턴 동안 넣는 총 피해예요. 조합 없이 장비 자체의 딜 기여만 비교할 때 보세요.`;
-  const xs=ITEMS.map(it=>({it,e:evalMode([it.n],c)})).sort((a,b)=>b.e.total-a.e.total);
-  const best=xs[0].e.total||1;
+  const xs=ITEMS.map(it=>({it,e:evalMode([it.n],c)})).sort((a,b)=>b.e.rate-a.e.rate);
+  const best=xs[0].e.rate||1;
   xs.forEach((x,i)=>{const d=card(i);
-   d.innerHTML=`<div class="rank">${i+1}</div><div class="items"><span class="it">${x.it.n}</span><span class="score">${(100*x.e.total/best).toFixed(0)}</span></div>${barsHTML(x.e,best,c)}`;
+   d.innerHTML=`<div class="rank">${i+1}</div><div class="items"><span class="it">${x.it.n}</span><span class="score">${(100*x.e.rate/best).toFixed(0)}</span></div>${barsHTML(x.e,best,c)}`;
    res.appendChild(d)});
   return;
  }
@@ -346,18 +348,18 @@ function run(){
  const rp=pairs(P), up=pairs(C);
  const all=[];
  rp.forEach(r=>up.forEach(u=>{if(u.includes(r[0])||u.includes(r[1]))return;all.push({r,u,e:evalMode([...r,...u],c)})}));
- const maxT=Math.max(1e-9,...all.map(x=>x.e.total));
- all.forEach(x=>x.s=100*x.e.total/maxT);
+ const maxT=Math.max(1e-9,...all.map(x=>x.e.rate));
+ all.forEach(x=>x.s=100*x.e.rate/maxT);
 
  if(tab==="make"){
   $("tabNote").textContent=`랜덤 ${rp.length}가지 경우를 전부 돌려서 평균 점수가 높은 순서예요. 최악은 가장 안 맞는 랜덤이 붙었을 때예요.`;
   const agg=up.map(u=>{const xs=all.filter(x=>x.u===u);if(!xs.length)return null;
-   const avg=xs.reduce((a,x)=>a+x.s,0)/xs.length, tot=xs.reduce((a,x)=>a+x.e.total,0)/xs.length;
+   const avg=xs.reduce((a,x)=>a+x.s,0)/xs.length, tot=xs.reduce((a,x)=>a+x.e.rate,0)/xs.length;
    const worst=xs.reduce((a,x)=>x.s<a.s?x:a), best=xs.reduce((a,x)=>x.s>a.s?x:a);
    return {u,avg,tot,worst,best}}).filter(Boolean).sort((a,b)=>b.avg-a.avg);
   agg.slice(0,8).forEach((x,i)=>{const d=card(i);
    d.innerHTML=`<div class="rank">${i+1}</div><div class="items">${x.u.map(n=>`<span class="it">${n}</span>`).join("")}<span class="score">평균 ${x.avg.toFixed(0)}</span></div>
-   <div class="sub">${c.T}턴 평균 총 피해 ${Math.round(x.tot).toLocaleString()}</div>
+   <div class="sub">평균 턴당 피해 ${x.tot.toFixed(0)}</div>
    <div class="sub">최고 ${x.best.s.toFixed(0)}점 (${x.best.r.join(" + ")}) · 최악 ${x.worst.s.toFixed(0)}점 (${x.worst.r.join(" + ")})</div>`;
    res.appendChild(d)});
   return;
@@ -380,8 +382,8 @@ function run(){
 
 function card(i){const d=document.createElement("div");d.className="card"+(i===0?" top":"");return d}
 function barsHTML(e,max,c){
- const w=Math.max(3,Math.min(100,100*e.total/max)), pw=e.total>0?w*e.prim/e.total:0;
- const txt=e.totA!=null?`없음 ${Math.round(e.totA)} / 있음 ${Math.round(e.totB)}`:`총 ${Math.round(e.total).toLocaleString()}`;
+ const w=Math.max(3,Math.min(100,100*e.rate/max)), pw=e.total>0?w*e.prim/e.total:0;
+ const txt=e.rateA!=null?`턴당 ${e.rateA.toFixed(0)} / ${e.rateB.toFixed(0)}`:`턴당 ${e.rate.toFixed(0)}`;
  const extra=[`대상 ${Math.round(e.prim)} · 주변 ${Math.round(e.splash)}`,`처치 ${e.kills}명${e.firstKill?` (첫 처치 ${e.firstKill}턴)`:""}`,`연사 ${e.skills.toFixed(1)}번`];
  if(gold>0&&e.delayed>0.005)extra.push(`금사슬로 늦게 들어간 피해 ${(e.delayed*100).toFixed(0)}%`);
  return `<div class="bars"><span class="bar"><i style="width:${w.toFixed(1)}%;background:linear-gradient(90deg,var(--deal) ${(100*pw/w).toFixed(0)}%,var(--brass) 0)"></i></span><span class="v">${txt}</span></div>
