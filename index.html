@@ -121,11 +121,9 @@ details summary{cursor:pointer;color:var(--muted);font-size:.85rem}
       <div class="grid" style="margin-top:10px">
         <label class="f">상대 HP<input type="number" id="H" min="1" value="700"></label>
         <label class="f">상대 공격력 (구겸)<input type="number" id="eAtk" min="1" value="18"></label>
-        <label class="f">상대 회피율 %<input type="number" id="eva" min="0" max="95" value="10"></label>
+        <label class="f">상대 회피율 %<input type="number" id="eva" min="0" max="95" value="0"></label>
         <label class="f">때리는 대상<select id="tRanged"><option value="0">근접 병사</option><option value="1">원거리 병사</option><option value="2">창병</option></select></label>
         <label class="f">공격 1회당 분노<input type="number" id="rAtk" min="0" step="0.5" value="1"></label>
-        <label class="f">사거리 +1 딜 가치 %<input type="number" id="rangeVal" min="0" max="100" value="12"></label>
-        <label class="f">HP 50% 미만 비중 %<input type="number" id="lowHp" min="0" max="100" value="15"></label>
         <label class="f">장비 옵션 굴림<select id="q"><option value="0">최저값</option><option value="0.5" selected>중간값</option><option value="1">최고값</option></select></label>
         <label class="f">시간 깃발 계절 수<input type="number" id="seasons" min="0" value="1"></label>
       </div>
@@ -166,11 +164,12 @@ details summary{cursor:pointer;color:var(--muted);font-size:.85rem}
     <h2 id="s4">추천</h2>
     <div class="tabs" role="tablist">
       <button role="tab" id="t-pool" aria-selected="true">나오면 좋은 2개</button>
-      <button role="tab" id="t-make" aria-selected="false">미리 만들 2개</button>
       <button role="tab" id="t-now" aria-selected="false">지금 붙일 2개</button>
       <button role="tab" id="t-solo" aria-selected="false">장비 하나씩</button>
+      <button role="tab" id="t-build" aria-selected="false">4개 빌드 비교</button>
     </div>
     <p class="note" id="tabNote"></p>
+    <div id="builds" hidden style="display:flex;flex-direction:column;gap:8px"></div>
     <div class="res" id="res"></div>
     <details>
       <summary>계산 가정 보기</summary>
@@ -185,6 +184,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:.85rem}
         <li>피해 X%는 (공격력+추가 피해)×X%, 피해 증가는 합연산이에요. 고정 피해는 피해 감소를 무시하고, 다트는 준 피해 일부를 고정 피해로 바꿔요.</li>
         <li>금 사슬갑옷 상한은 타격마다 따로 적용해요. 본타, 갈고리검 고정 피해, 구겸 피해, 분심계·건곤도 피해를 각각 다른 피해로 봐요.</li>
         <li>범위 옵션은 "장비 옵션 굴림" 값 하나로 통일해요. 모래시계는 "그 턴에 한 번 더 행동"으로 해석했어요.</li>
+        <li>장비 설명에 숫자로 안 나오는 것은 점수에 넣지 않아요: 유성추 사거리 +1, 도끼(쇠뇌가 맞지 않아 HP 50% 아래로 안 떨어짐), 쌍도끼·분노의 허리띠의 분노 외 효과, 아군이 넣는 고정 피해.</li>
         <li>방어·회복 장비와 태양 갑옷(쇠뇌 옆 칸 적이 거의 없음)은 효과를 점수에 넣지 않고, 장비에 붙은 공격력 수치만 반영해요.</li>
       </ul>
     </details>
@@ -250,8 +250,8 @@ function ctx(){
  const L=lvl, t=$("tRanged").value;
  return {L,bAtk:BASE[L][1],bHp:BASE[L][0],follow:.4+.05*L,H:Math.max(1,g("H")),dr:Math.min(.95,g("dr")/100),eva:Math.min(.95,g("eva")/100),
   nb:melee2?2:0,T:Math.max(1,Math.min(60,Math.round(g("T")))),
-  eAtk:Math.max(1,g("eAtk")),tRanged:t==="1",spear:t==="2",rAtk:g("rAtk"),rHit:0,rangeVal:g("rangeVal")/100,lowHp:g("lowHp")/100,
-  q:parseFloat($("q").value),seasons:g("seasons"),bcA:g("bcA"),cap:Math.max(1,g("cap"))};
+  eAtk:Math.max(1,g("eAtk")),tRanged:t==="1",spear:t==="2",rAtk:g("rAtk"),rHit:0,rangeVal:0,lowHp:0,
+  q:parseFloat($("q").value),seasons:g("seasons"),spread:true,bcA:g("bcA"),cap:Math.max(1,g("cap"))};
 }
 
 // Turn-by-turn simulation: one target plus nb enemies within 1칸. gc = enemies wear 금 사슬갑옷.
@@ -279,7 +279,7 @@ function evaluate(names,c,gc){
  const action=(w,t)=>{
   const isSkill=rage>=4-1e-9, ks=isSkill?[1,c.follow,c.follow]:[1], atk=atkNow(t), near=others();
   ks.forEach(k=>{
-   const up=1+s.dmgUp+(P.fresh?s.whip:0)+(!isSkill&&near.length?s.whip*.5:0);
+   const up=1+s.dmgUp+(P.fresh?s.whip:0);
    const base=(atk*k+s.curPct*Math.max(0,P.hp))*up*rangeMul;
    const main=base*(s.conv+(1-s.conv)*(1-drE));
    hit(P,main,w*hitP*(1-cP));hit(P,main*s.critM,w*hitP*cP);
@@ -300,7 +300,7 @@ function evaluate(names,c,gc){
   action(1,t); if(s.extra)action(s.extra,t);
   en.forEach(e=>{if(e.dead||e.dl<=0)return;
    const atk=atkNow(t);hit(e,s.distract*atk,e.dw);
-   if(e===P&&turnFixed>0)others().slice(0,4).forEach(o=>hit(o,turnFixed*c.L*.1*e.dw,1));
+   if(c.spread&&e===P&&turnFixed>0)others().slice(0,4).forEach(o=>hit(o,turnFixed*c.L*.1*e.dw,1));
    e.dl--});
   en.forEach(e=>{if(e.dead)return;e.hp-=e.q[1];e.q=[0,e.q[2],0]});
   rage+=s.rageHit;
@@ -334,6 +334,17 @@ function run(){
  const res=$("res");res.innerHTML="";
  const r1=$("r1").value,r2=$("r2").value;
 
+ if(tab==="build"){
+  $("tabNote").textContent="최종 4개를 직접 넣어서 비교해요. 빈 칸은 빼고 계산해요.";
+  const rows=[...document.querySelectorAll(".brow")].map(r=>[...r.querySelectorAll("select")].map(x=>x.value).filter(Boolean)).map(a=>[...new Set(a)]).filter(a=>a.length);
+  if(!rows.length){res.innerHTML='<p class="note">위 빌드 칸에 장비를 골라주세요.</p>';return}
+  const xs=rows.map(n=>({n,e:evalMode(n,c)})).sort((a,b)=>b.e.rate-a.e.rate);
+  const best=xs[0].e.rate||1;
+  xs.forEach((x,i)=>{const d=card(i);
+   d.innerHTML=`<div class="rank">${i+1}</div><div class="items">${x.n.map(n=>`<span class="it">${n}</span>`).join("")}<span class="score">${(100*x.e.rate/best).toFixed(0)}</span></div>${barsHTML(x.e,best,c)}`;
+   res.appendChild(d)});
+  return;
+ }
  if(tab==="solo"){
   $("tabNote").textContent=`장비 1개만 단 쇠뇌가 ${c.T}턴 동안 넣는 총 피해예요. 조합 없이 장비 자체의 딜 기여만 비교할 때 보세요.`;
   const xs=ITEMS.map(it=>({it,e:evalMode([it.n],c)})).sort((a,b)=>b.e.rate-a.e.rate);
@@ -344,32 +355,21 @@ function run(){
   return;
  }
  if(P.length<2){res.innerHTML='<p class="note">8개 풀에서 장비를 2개 이상 골라주세요.</p>';$("tabNote").textContent="";return}
- if(C.length<2){res.innerHTML='<p class="note">내 후보를 2개 이상 골라주세요.</p>';$("tabNote").textContent="";return}
- const rp=pairs(P), up=pairs(C);
+ const allC=C.length<2; const CC=allC?ITEMS.map(i=>i.n):C;
+ const rp=pairs(P), up=pairs(CC);
  const all=[];
  rp.forEach(r=>up.forEach(u=>{if(u.includes(r[0])||u.includes(r[1]))return;all.push({r,u,e:evalMode([...r,...u],c)})}));
  const maxT=Math.max(1e-9,...all.map(x=>x.e.rate));
  all.forEach(x=>x.s=100*x.e.rate/maxT);
 
- if(tab==="make"){
-  $("tabNote").textContent=`랜덤 ${rp.length}가지 경우를 전부 돌려서 평균 점수가 높은 순서예요. 최악은 가장 안 맞는 랜덤이 붙었을 때예요.`;
-  const agg=up.map(u=>{const xs=all.filter(x=>x.u===u);if(!xs.length)return null;
-   const avg=xs.reduce((a,x)=>a+x.s,0)/xs.length, tot=xs.reduce((a,x)=>a+x.e.rate,0)/xs.length;
-   const worst=xs.reduce((a,x)=>x.s<a.s?x:a), best=xs.reduce((a,x)=>x.s>a.s?x:a);
-   return {u,avg,tot,worst,best}}).filter(Boolean).sort((a,b)=>b.avg-a.avg);
-  agg.slice(0,8).forEach((x,i)=>{const d=card(i);
-   d.innerHTML=`<div class="rank">${i+1}</div><div class="items">${x.u.map(n=>`<span class="it">${n}</span>`).join("")}<span class="score">평균 ${x.avg.toFixed(0)}</span></div>
-   <div class="sub">평균 턴당 피해 ${x.tot.toFixed(0)}</div>
-   <div class="sub">최고 ${x.best.s.toFixed(0)}점 (${x.best.r.join(" + ")}) · 최악 ${x.worst.s.toFixed(0)}점 (${x.worst.r.join(" + ")})</div>`;
-   res.appendChild(d)});
-  return;
- }
  if(tab==="pool"){
-  $("tabNote").textContent="8개 중 어떤 2개가 붙으면 좋은지 순서예요. 각 줄은 그 2개에 내 후보 중 가장 잘 맞는 2개를 붙였을 때 기준이에요.";
-  const best=rp.map(r=>{const xs=all.filter(x=>x.r===r);return xs.length?xs.reduce((a,x)=>x.s>a.s?x:a):null}).filter(Boolean).sort((a,b)=>b.s-a.s);
-  const show=best.length>8?[...best.slice(0,5),null,...best.slice(-3)]:best;
-  show.forEach(x=>{if(!x){const h=document.createElement("h3");h.textContent="나오면 아쉬운 2개";res.appendChild(h);return}
-   res.appendChild(full(x,best.indexOf(x)+1,"pool",maxT,c))});
+  $("tabNote").textContent=`8개 중 어떤 2개가 붙으면 좋은지 ${rp.length}가지 전부의 순위예요. 점수는 그 2개에 ${allC?"전체 장비 중":"내 후보 중"} 가장 잘 맞는 2개를 붙였을 때의 고점이고, 아래에 고점 조합 3개를 같이 보여줘요.`;
+  const grp=rp.map(r=>{const xs=all.filter(x=>x.r===r).sort((a,b)=>b.s-a.s);return xs.length?{r,xs}:null}).filter(Boolean).sort((a,b)=>b.xs[0].s-a.xs[0].s);
+  grp.forEach((g,i)=>{const d=card(i),top=g.xs[0];
+   d.innerHTML=`<div class="rank">${i+1}</div><div class="items">${g.r.map(n=>`<span class="it hl">${n}</span>`).join("")}<span class="score">${top.s.toFixed(0)}</span></div>
+   ${barsHTML(top.e,maxT,c)}
+   <div class="sub">${g.xs.slice(0,3).map((x,k)=>`${k+1}. + ${x.u.join(" + ")} · ${x.s.toFixed(0)}점 (턴당 ${x.e.rate.toFixed(0)})`).join("<br>")}</div>`;
+   res.appendChild(d)});
   return;
  }
  if(r1===""||r2===""){$("tabNote").textContent="";res.innerHTML='<p class="note">위에서 "실제로 나온 랜덤" 2개를 고르면 지금 붙일 2개를 추천해요.</p>';return}
@@ -417,7 +417,7 @@ function fillRandom(){
   s.value=pool.has(cur)?cur:""});
 }
 function refresh(){chipGroups($("pool"),POOL,pool,{max:8});chipGroups($("cands"),ITEMS,cand,{});fillRandom();run()}
-function setTab(t){tab=t;["make","pool","now","solo"].forEach(k=>$("t-"+k).setAttribute("aria-selected",k===t));run()}
+function setTab(t){tab=t;$("builds").hidden=t!=="build";["pool","now","solo","build"].forEach(k=>$("t-"+k).setAttribute("aria-selected",k===t));run()}
 function setLv(l){lvl=l;[1,3,6].forEach(k=>$("lv"+k).setAttribute("aria-pressed",k===l));run()}
 [1,3,6].forEach(k=>$("lv"+k).onclick=()=>setLv(k));
 function setMx(m){melee2=m;$("mx0").setAttribute("aria-pressed",!m);$("mx1").setAttribute("aria-pressed",m);run()}
@@ -426,12 +426,21 @@ function setHp(v){$("H").value=v;syncHp()}
 function syncHp(){const h=$("H").value;$("hp0").setAttribute("aria-pressed",h==="700");$("hp1").setAttribute("aria-pressed",h==="1100");run()}
 $("hp0").onclick=()=>setHp(700);$("hp1").onclick=()=>setHp(1100);$("H").addEventListener("input",syncHp);
 function setGold(g){gold=g;[0,1,2].forEach(k=>$("gc"+k).setAttribute("aria-pressed",k===g));run()}
-["make","pool","now","solo"].forEach(k=>$("t-"+k).onclick=()=>setTab(k));
+["pool","now","solo","build"].forEach(k=>$("t-"+k).onclick=()=>setTab(k));
 [0,1,2].forEach(k=>$("gc"+k).onclick=()=>setGold(k));
 $("allBtn").onclick=()=>{cand=new Set(ITEMS.map(i=>i.n));refresh()};
 $("clrBtn").onclick=()=>{cand.clear();refresh()};
 document.querySelectorAll("input,select").forEach(el=>el.addEventListener("input",()=>{
  if((el.id==="r1"||el.id==="r2")&&$("r1").value&&$("r2").value)setTab("now");else run()}));
+function addBuildRow(){
+ const box=$("builds"), r=document.createElement("div");r.className="brow grid";r.style.gridTemplateColumns="repeat(auto-fill,minmax(130px,1fr))";
+ const n=box.querySelectorAll(".brow").length+1;
+ for(let i=0;i<4;i++){const sel=document.createElement("select");sel.setAttribute("aria-label",`빌드 ${n} 장비 ${i+1}`);
+  sel.innerHTML='<option value="">—</option>'+ITEMS.map(it=>`<option>${it.n}</option>`).join("");sel.addEventListener("input",run);r.appendChild(sel)}
+ const lab=document.createElement("div");lab.className="lv";lab.textContent=`빌드 ${n}`;
+ box.insertBefore(lab,$("addB"));box.insertBefore(r,$("addB"));
+}
+(function(){const b=document.createElement("button");b.type="button";b.className="btn";b.id="addB";b.textContent="빌드 줄 추가";b.style.alignSelf="flex-start";b.onclick=addBuildRow;$("builds").appendChild(b);for(let i=0;i<3;i++)addBuildRow()})();
 refresh();
 </script>
 
