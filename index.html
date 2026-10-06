@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>쇠뇌 제련 계산기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one tall column — 쇠뇌/상대 → 이번 판 8개 → 내 후보 → 추천 3종. Forge-iron slate with a brass accent. */
+:root{
+  --bg:#eef0ee; --panel:#fbfcfa; --ink:#1d2421; --muted:#5d6a64; --line:#d3d9d5;
+  --brass:#a8671b; --brass-soft:#f3e3cb; --iron:#2f4a44;
+  --deal:#b8452f; --warn:#9a5b00; --chip:#e4e9e5; --on:#ffffff;
+  --f-display:"Do Hyeon","IBM Plex Sans KR",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#151a18; --panel:#1d2421; --ink:#e7ece9; --muted:#9aa8a1; --line:#33403b;
+  --brass:#e0a254; --brass-soft:#3a2c18; --iron:#a9cbbf;
+  --deal:#ec7a62; --warn:#e6a845; --chip:#28312d; --on:#1d2421; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#151a18; --panel:#1d2421; --ink:#e7ece9; --muted:#9aa8a1; --line:#33403b;
+  --brass:#e0a254; --brass-soft:#3a2c18; --iron:#a9cbbf;
+  --deal:#ec7a62; --warn:#e6a845; --chip:#28312d; --on:#1d2421; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55}
+.wrap{max-width:860px;margin:0 auto;padding-inline:16px;padding-block:20px 48px;display:flex;flex-direction:column;gap:18px}
+h1{font-family:var(--f-display);font-weight:400;font-size:2rem;margin:0;letter-spacing:.01em;color:var(--iron)}
+h2{font-family:var(--f-display);font-weight:400;font-size:1.3rem;margin:0;color:var(--iron);text-wrap:balance}
+h3{font-size:1rem;margin:6px 0 0;color:var(--ink)}
+.lede{color:var(--muted);margin:4px 0 0;max-width:62ch}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.row{display:flex;flex-wrap:wrap;gap:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+label.f{display:flex;flex-direction:column;gap:3px;font-size:.8rem;color:var(--muted);min-width:0}
+input[type=number],select{font:inherit;font-family:var(--f-num);font-size:.92rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;width:100%;box-sizing:border-box}
+select{font-family:var(--f-body)}
+input:focus-visible,select:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.stat{font-family:var(--f-num);font-size:.85rem;color:var(--muted);margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:999px;padding:5px 11px;font:inherit;font-size:.86rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--brass);border-color:var(--brass);color:var(--on)}
+.chip:disabled{opacity:.35;cursor:not-allowed}
+.lv{font-size:.72rem;color:var(--muted);letter-spacing:.06em;margin:4px 0 -2px}
+.note{font-size:.8rem;color:var(--muted);margin:0}
+.tag{display:inline-block;font-size:.72rem;padding:1px 7px;border-radius:4px;background:var(--brass-soft);color:var(--brass);letter-spacing:.04em;vertical-align:middle}
+.btn{border:1px solid var(--brass);background:transparent;color:var(--brass);border-radius:6px;padding:6px 12px;font:inherit;font-size:.85rem;cursor:pointer}
+.res{display:flex;flex-direction:column;gap:10px}
+.card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--panel);display:grid;grid-template-columns:2.2em 1fr;gap:4px 10px}
+.card.top{box-shadow:0 0 0 1px var(--brass) inset;border-color:var(--brass)}
+.rank{font-family:var(--f-display);font-size:1.5rem;color:var(--brass);line-height:1}
+.items{display:flex;flex-wrap:wrap;gap:5px;align-items:center;min-width:0}
+.it{font-size:.85rem;padding:2px 8px;border-radius:5px;background:var(--chip)}
+.it.fixed{background:transparent;border:1px dashed var(--line);color:var(--muted)}
+.it.hl{background:var(--brass-soft);color:var(--brass)}
+.score{font-family:var(--f-num);margin-left:auto;font-size:1.05rem}
+.sub{grid-column:2;font-size:.8rem;color:var(--muted)}
+.bars{grid-column:2;display:grid;grid-template-columns:1fr 7.5em;gap:3px 8px;align-items:center;font-size:.8rem}
+.bar{height:8px;border-radius:4px;background:var(--chip);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--deal)}
+.v{font-family:var(--f-num);font-variant-numeric:tabular-nums;text-align:right;color:var(--muted)}
+.flags{grid-column:2;display:flex;flex-direction:column;gap:2px;font-size:.78rem;color:var(--warn)}
+details summary{cursor:pointer;color:var(--muted);font-size:.85rem}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;align-self:flex-start}
+.seg button{border:0;background:transparent;color:var(--ink);padding:7px 14px;font:inherit;font-size:.88rem;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--iron);color:var(--panel)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tabs button{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;padding:7px 12px;font:inherit;font-size:.88rem;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--iron);color:var(--panel);border-color:var(--iron)}
+@media (prefers-reduced-motion:no-preference){.bar i{transition:width .25s}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>쇠뇌 제련 계산기</h1>
+    <p class="lede">이번 판 8개 풀과 내가 만들 수 있는 후보를 넣으면, 정해진 턴 동안 상대 무리에게 넣는 총 피해(광역 포함)로만 순위를 매겨요.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="s1">
+    <h2 id="s1">쇠뇌와 상대</h2>
+    <div class="grid">
+      <div class="f" style="display:flex;flex-direction:column;gap:3px;font-size:.8rem;color:var(--muted)">쇠뇌 레벨
+        <div class="seg" role="group" aria-label="쇠뇌 레벨">
+          <button type="button" id="lv1" aria-pressed="false">Lv.1</button>
+          <button type="button" id="lv3" aria-pressed="true">중간 Lv.3</button>
+          <button type="button" id="lv6" aria-pressed="false">최대 Lv.6</button>
+        </div>
+      </div>
+      <label class="f">상대 피해 감소율 %<input type="number" id="dr" min="0" max="95" value="40"></label>
+      <div class="f" style="display:flex;flex-direction:column;gap:3px;font-size:.8rem;color:var(--muted)">상대 HP
+        <div class="seg" role="group" aria-label="상대 HP">
+          <button type="button" id="hp0" aria-pressed="true">보통 700</button>
+          <button type="button" id="hp1" aria-pressed="false">후반 1100</button>
+        </div>
+      </div>
+      <div class="f" style="display:flex;flex-direction:column;gap:3px;font-size:.8rem;color:var(--muted)">난전 여부
+        <div class="seg" role="group" aria-label="난전 여부">
+          <button type="button" id="mx0" aria-pressed="false">난전 아님</button>
+          <button type="button" id="mx1" aria-pressed="true">난전</button>
+        </div>
+      </div>
+      <label class="f">전투 길이(턴)<input type="number" id="T" min="1" max="60" value="12"></label>
+    </div>
+    <p class="stat" id="baseStat"></p>
+    <div class="lv">상대 금 사슬갑옷</div>
+    <div class="row" style="align-items:flex-end">
+      <div class="seg" role="group" aria-label="상대 금 사슬갑옷">
+        <button type="button" id="gc0" aria-pressed="true">없음</button>
+        <button type="button" id="gc1" aria-pressed="false">있음</button>
+        <button type="button" id="gc2" aria-pressed="false">둘 다 비교</button>
+      </div>
+      <label class="f" style="width:140px">한 번에 받는 피해 상한<input type="number" id="cap" min="1" value="22"></label>
+    </div>
+    <p class="note">금 사슬갑옷은 한 번에 받는 피해를 상한까지로 막고, 넘친 피해는 다음 2턴에 반씩 나눠 들어가요. 큰 한 방은 늦게 들어가고, 여러 번 나눠 때리는 장비가 유리해져요.</p>
+    <details>
+      <summary>세부 가정 바꾸기</summary>
+      <div class="grid" style="margin-top:10px">
+        <label class="f">상대 HP<input type="number" id="H" min="1" value="700"></label>
+        <label class="f">상대 공격력 (구겸)<input type="number" id="eAtk" min="1" value="18"></label>
+        <label class="f">상대 회피율 %<input type="number" id="eva" min="0" max="95" value="10"></label>
+        <label class="f">때리는 대상<select id="tRanged"><option value="0">근접 병사</option><option value="1">원거리 병사</option><option value="2">창병</option></select></label>
+        <label class="f">공격 1회당 분노<input type="number" id="rAtk" min="0" step="0.5" value="1"></label>
+        <label class="f">사거리 +1 딜 가치 %<input type="number" id="rangeVal" min="0" max="100" value="12"></label>
+        <label class="f">HP 50% 미만 비중 %<input type="number" id="lowHp" min="0" max="100" value="15"></label>
+        <label class="f">장비 옵션 굴림<select id="q"><option value="0">최저값</option><option value="0.5" selected>중간값</option><option value="1">최고값</option></select></label>
+        <label class="f">시간 깃발 계절 수<input type="number" id="seasons" min="0" value="1"></label>
+      </div>
+      <p class="note" style="margin-top:8px">분노는 2/4에서 시작해서 4가 차면 그 턴에 연사를 쓰고 0이 된다고 봐요. 분노는 때릴 때와 맞을 때 차는데, 쇠뇌는 맞을 일이 거의 없어서 때릴 때만 계산해요. 그래서 분노의 허리띠는 효과가 없어요.</p>
+    </details>
+  </section>
+
+  <section class="panel" aria-labelledby="s2">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <h2 id="s2">이번 판 8개 풀</h2>
+      <span class="stat" id="poolCnt"></span>
+    </div>
+    <p class="note">이번 판에 정해진 8개를 눌러주세요. 이 중 2개가 랜덤으로 붙어요.</p>
+    <div id="pool"></div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))">
+      <label class="f">실제로 나온 랜덤 1<select id="r1"></select></label>
+      <label class="f">실제로 나온 랜덤 2<select id="r2"></select></label>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="s3">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <h2 id="s3">내가 붙일 후보</h2>
+      <div class="row">
+        <button type="button" class="btn" id="allBtn">코인 모드: 전부 후보로</button>
+        <button type="button" class="btn" id="clrBtn">비우기</button>
+      </div>
+    </div>
+    <p class="note">대장간에서 나온 6개(또는 코인으로 고를 수 있는 것)를 눌러 후보로 넣으세요.</p>
+    <div class="grid">
+      <label class="f">백참도 공격력 +%<input type="number" id="bcA" min="0" max="50" value="0"></label>
+      <label class="f">명광 갑옷은 딜이 없어서 순위에서 밀려요<span class="stat" style="padding-top:6px">—</span></label>
+    </div>
+    <div id="cands"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="s4">
+    <h2 id="s4">추천</h2>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="t-pool" aria-selected="true">나오면 좋은 2개</button>
+      <button role="tab" id="t-make" aria-selected="false">미리 만들 2개</button>
+      <button role="tab" id="t-now" aria-selected="false">지금 붙일 2개</button>
+      <button role="tab" id="t-solo" aria-selected="false">장비 하나씩</button>
+    </div>
+    <p class="note" id="tabNote"></p>
+    <div class="res" id="res"></div>
+    <details>
+      <summary>계산 가정 보기</summary>
+      <ul class="note">
+        <li>"1칸 안"은 격자에서 상하좌우 칸이에요. 난전이면 노리는 대상 상하좌우에 다른 적 2명이 붙어 있다고 보고, 난전이 아니면 대상 혼자예요. 쇠뇌가 노리는 대상과 그 옆 적들을 놓고, 전투 길이만큼 턴마다 시뮬레이션해요. 모든 적에게 실제로 깎인 HP를 합친 총 피해로 순위를 매기고, 점수 100은 그 탭에서 총 피해가 가장 큰 조합이에요.</li>
+        <li>대상이 죽으면 다음 적을 노려요. 현철 지팡이는 새 대상마다 다시 터지고, 혈적자는 처치마다 공격력 +1이에요.</li>
+        <li>건곤도: 일반 공격 타마다 대상 주변 최대 4명에게 공격력 30~60% 추가 고정 피해. 가시공: 처치할 때 주변 최대 8명에게 공격력 50~100% 추가 고정 피해.</li>
+        <li>분심계: 연사 타마다 50% 확률로 분심(3턴). 분심 걸린 대상은 매 턴 공격력 20~40% 추가 고정 피해를 받고, 그 턴에 받은 고정 피해의 (레벨×10)%가 주변 최대 4명에게 퍼져요.</li>
+        <li>"추가 고정 피해는 기타 효과를 발동시키지 않는다"는 규칙대로, 분심계로 퍼지는 건 갈고리검 고정 피해와 다트로 바뀐 고정 피해뿐이고 현철·분심·건곤도·가시공의 추가 고정 피해는 안 퍼져요. 아군이 넣는 고정 피해도 퍼지지만 여기선 쇠뇌 것만 계산해요.</li>
+        <li>평소엔 일반 공격(공격력 100%) 1타, 분노 4가 차면 연사 3타(첫 타 100%, 후속 2타는 레벨별 45~70%)예요. 낭아봉·갈고리검·구겸 같은 타격 시 효과는 연사 3타 모두에 붙어요.</li>
+        <li>낭아봉은 상대의 그 순간 남은 HP로 계산해서, 상대가 깎일수록 약해져요.</li>
+        <li>피해 X%는 (공격력+추가 피해)×X%, 피해 증가는 합연산이에요. 고정 피해는 피해 감소를 무시하고, 다트는 준 피해 일부를 고정 피해로 바꿔요.</li>
+        <li>금 사슬갑옷 상한은 타격마다 따로 적용해요. 본타, 갈고리검 고정 피해, 구겸 피해, 분심계·건곤도 피해를 각각 다른 피해로 봐요.</li>
+        <li>범위 옵션은 "장비 옵션 굴림" 값 하나로 통일해요. 모래시계는 "그 턴에 한 번 더 행동"으로 해석했어요.</li>
+        <li>방어·회복 장비와 태양 갑옷(쇠뇌 옆 칸 적이 거의 없음)은 효과를 점수에 넣지 않고, 장비에 붙은 공격력 수치만 반영해요.</li>
+      </ul>
+    </details>
+  </section>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const BASE={1:[117,6],2:[138,7],3:[163,8],4:[192,10],5:[227,12],6:[268,14]};
+const ITEMS=[
+ {n:"치료검",lv:1,atk:[1,5]},
+ {n:"회심검",lv:1,atk:[2,10],fx:(s,c,v)=>{s.critP+=v(.2,.4);s.critM=Math.max(s.critM,v(1.5,1.8))}},
+ {n:"유성추",lv:1,atk:[2,10],fx:(s,c,v)=>{s.ignEva=1-(1-s.ignEva)*(1-v(.3,.7));s.range+=1}},
+ {n:"쌍도끼",lv:1,atk:[2,10],fx:(s,c,v)=>{s.rageAtk+=1;s.rageSkill+=v(.2,.5)*2}},
+ {n:"월아도",lv:1,atk:[2,8],fx:(s,c,v)=>{s.dmgUp+=v(.2,.5);s.ignDr=1-(1-s.ignDr)*.8;s.flags.push("월아도: 받는 피해 2배는 점수에 안 들어가요")}},
+ {n:"용연검",lv:1,atk:[2,8],fx:(s,c,v)=>{s.atkPct+=v(.1,.2);s.atkGrow+=.003}},
+ {n:"사슬갑옷",lv:3,hp:[20,70]},
+ {n:"술 조롱박",lv:3,hp:[20,50]},
+ {n:"피해 반사 갑옷",lv:3,hp:[20,80]},
+ {n:"구리 방패",lv:3,hp:[20,60]},
+ {n:"황월",lv:3,hp:[20,40],atk:[1,5]},
+ {n:"무쇠 방패",lv:3,hp:[20,70]},
+ {n:"흡혈검",lv:5,hp:[20,40],atk:[2,10]},
+ {n:"환도",lv:5,hp:[20,40],atk:[2,10]},
+ {n:"흑요석 갑옷",lv:5,hp:[20,50]},
+ {n:"다트",lv:7,atk:[4,14],fx:(s,c,v)=>{s.conv=Math.min(1,s.conv+v(.2,.5))}},
+ {n:"덩굴 방패",lv:7,hp:[20,60]},
+ {n:"낭아봉",lv:7,atk:[2,8],fx:(s,c,v)=>{s.curPct+=v(.01,.05)}},
+ {n:"군기",lv:7,hp:[20,50]},
+ {n:"건곤도",lv:7,atk:[2,8],fx:(s,c,v)=>{s.gk+=v(.3,.6)}},
+ {n:"태양 갑옷",lv:7,hp:[20,60]},
+ {n:"정심회",lv:7,hp:[20,50]},
+ {n:"적금순",lv:7,hp:[20,50]},
+ {n:"백사 채찍",lv:7,atk:[2,10],fx:(s,c,v)=>{s.whip+=v(.2,.5)}},
+ {n:"금 사슬갑옷",lv:12,hp:[20,80]},
+ {n:"갈고리검",lv:12,atk:[2,8],fx:(s,c,v)=>{s.hookP+=v(.15,.35);s.hookPct=(c.tRanged?1+c.L:2+c.L)/100}},
+ {n:"호심경",lv:12,hp:[20,70]},
+ {n:"도끼",lv:12,atk:[2,8],fx:(s,c)=>{s.atkLate+=3*c.L*c.lowHp}},
+ {n:"옥패",lv:12,hp:[20,50]},
+ {n:"천기산",lv:12,hp:[20,40],atk:[2,6],fx:(s,c,v)=>{s.atkPct+=v(.05,.15)*1.5}},
+ {n:"분심계",lv:12,atk:[2,6],fx:(s,c,v)=>{s.distract+=v(.2,.4)}},
+ {n:"구겸",lv:12,atk:[2,8],fx:(s,c,v)=>{s.sickle+=v(4,8)*c.L/100*c.eAtk}},
+ {n:"분노의 허리띠",lv:12,hp:[20,50],fx:(s,c,v)=>{s.rageHit+=v(.3,.5)*c.rHit}},
+ {n:"가시공",lv:12,atk:[2,8],fx:(s,c,v)=>{s.thorn+=v(.5,1)}},
+ {n:"회피 신발",lv:14,hp:[20,50]},
+ {n:"혈적자",lv:14,atk:[2,8],fx:(s,c,v)=>{s.exec=Math.max(s.exec,v(.05,.2));s.killAtk=1}},
+ {n:"시간 깃발",lv:14,hp:[30,30],atk:[3,3],fx:(s,c)=>{s.atk+=.5*(3+c.L)*c.seasons;s.flags.push("시간 깃발: 공격력이 붙을 확률 50%로 계산")}},
+ {n:"모래시계",lv:14,atk:[2,4],fx:(s,c,v)=>{s.extra+=v(.05,.25)}},
+ {n:"현목 영락",lv:14,hp:[20,50]},
+ {n:"현철 지팡이",lv:14,hp:[20,40],atk:[2,6],fx:(s,c,v)=>{s.once+=v(.1,.25)}},
+ {n:"백참도",lv:5,ex:1,atk:[1,1],fx:(s,c)=>{s.atkPct+=c.bcA/100}},
+ {n:"명광 갑옷",lv:5,ex:1,hp:[10,10]},
+];
+const POOL=ITEMS.filter(i=>!i.ex);
+const byName=Object.fromEntries(ITEMS.map(i=>[i.n,i]));
+
+let pool=new Set();
+let cand=new Set();
+let tab="pool", gold=0, lvl=3, melee2=true;
+
+function ctx(){
+ const g=id=>parseFloat($(id).value)||0;
+ const L=lvl, t=$("tRanged").value;
+ return {L,bAtk:BASE[L][1],bHp:BASE[L][0],follow:.4+.05*L,H:Math.max(1,g("H")),dr:Math.min(.95,g("dr")/100),eva:Math.min(.95,g("eva")/100),
+  nb:melee2?2:0,T:Math.max(1,Math.min(60,Math.round(g("T")))),
+  eAtk:Math.max(1,g("eAtk")),tRanged:t==="1",spear:t==="2",rAtk:g("rAtk"),rHit:0,rangeVal:g("rangeVal")/100,lowHp:g("lowHp")/100,
+  q:parseFloat($("q").value),seasons:g("seasons"),bcA:g("bcA"),cap:Math.max(1,g("cap"))};
+}
+
+// Turn-by-turn simulation: one target plus nb enemies within 1칸. gc = enemies wear 금 사슬갑옷.
+function evaluate(names,c,gc){
+ const v=(lo,hi)=>lo+c.q*(hi-lo);
+ const s={atk:0,atkPct:0,atkGrow:0,atkLate:0,dmgUp:0,whip:0,critP:0,critM:1.5,conv:0,ignDr:0,ignEva:0,extra:0,curPct:0,hookP:0,hookPct:0,
+  sickle:0,distract:0,once:0,exec:0,killAtk:0,gk:0,thorn:0,range:0,rageAtk:0,rageSkill:0,rageHit:0,flags:[]};
+ const its=names.map(n=>byName[n]);
+ its.forEach(it=>{if(it.atk)s.atk+=v(...it.atk)});
+ its.forEach(it=>it.fx&&it.fx(s,c,v));
+ if(c.spear){s.atkPct+=.4;s.ignDr=1-(1-s.ignDr)*.8}
+ const hitP=1-c.eva*(1-s.ignEva), drE=c.dr*(1-s.ignDr), cP=Math.min(1,s.critP), critAvg=1+cP*(s.critM-1);
+ const rangeMul=1+s.range*c.rangeVal;
+ const en=Array.from({length:1+c.nb},()=>({hp:c.H,q:[0,0,0],dl:0,dw:0,fresh:true,dead:false}));
+ let rage=2,skills=0,kills=0,firstKill=null,bonusAtk=0,primDmg=0,splashDmg=0,delayed=0,raw=0;
+ const hit=(e,x,w,isPrim)=>{ // one damage instance on enemy e, expected weight w
+  if(w<=0||x<=0)return;
+  const now=gc?Math.min(x,c.cap):x, ex=x-now;
+  e.hp-=now*w; raw+=x*w;
+  if(ex>0){e.q[1]+=ex*.5*w;e.q[2]+=ex*.5*w;delayed+=ex*w}
+ };
+ const atkNow=t=>(c.bAtk+s.atk+bonusAtk)*(1+s.atkPct+s.atkGrow*t)+s.atkLate;
+ let P=null, turnFixed=0;
+ const others=()=>en.filter(e=>!e.dead&&e!==P);
+ const action=(w,t)=>{
+  const isSkill=rage>=4-1e-9, ks=isSkill?[1,c.follow,c.follow]:[1], atk=atkNow(t), near=others();
+  ks.forEach(k=>{
+   const up=1+s.dmgUp+(P.fresh?s.whip:0)+(!isSkill&&near.length?s.whip*.5:0);
+   const base=(atk*k+s.curPct*Math.max(0,P.hp))*up*rangeMul;
+   const main=base*(s.conv+(1-s.conv)*(1-drE));
+   hit(P,main,w*hitP*(1-cP));hit(P,main*s.critM,w*hitP*cP);
+   turnFixed+=base*s.conv*critAvg*w*hitP;
+   if(s.hookP){hit(P,s.hookPct*c.H,w*hitP*s.hookP);turnFixed+=s.hookPct*c.H*w*hitP*s.hookP}
+   if(s.sickle)hit(P,s.sickle*(1-drE),w*hitP);
+   if(P.fresh&&s.once)hit(P,s.once*c.H,w*hitP);
+   P.fresh=false;
+   if(!isSkill&&s.gk)near.slice(0,4).forEach(o=>hit(o,s.gk*atk,w*hitP));
+  });
+  if(isSkill){skills+=w;rage=rage*(1-w)+w*s.rageSkill;if(s.distract){P.dl=3;P.dw=Math.max(P.dw,.875)}}
+  else rage+=w*(c.rAtk+s.rageAtk);
+ };
+ for(let t=0;t<c.T;t++){
+  P=en.find(e=>!e.dead); if(!P)break;
+  const before=en.map(e=>e.hp);
+  turnFixed=0;
+  action(1,t); if(s.extra)action(s.extra,t);
+  en.forEach(e=>{if(e.dead||e.dl<=0)return;
+   const atk=atkNow(t);hit(e,s.distract*atk,e.dw);
+   if(e===P&&turnFixed>0)others().slice(0,4).forEach(o=>hit(o,turnFixed*c.L*.1*e.dw,1));
+   e.dl--});
+  en.forEach(e=>{if(e.dead)return;e.hp-=e.q[1];e.q=[0,e.q[2],0]});
+  rage+=s.rageHit;
+  en.forEach((e,i)=>{const d=Math.max(0,before[i]-Math.max(0,e.hp));if(e===P)primDmg+=d;else splashDmg+=d});
+  // deaths (target can be executed by 혈적자)
+  let chain=true;
+  while(chain){chain=false;
+   en.forEach(e=>{if(e.dead)return;const thr=e===P?c.H*s.exec:0;
+    if(e.hp<=thr){if(e.hp>0){if(e===P)primDmg+=e.hp;else splashDmg+=e.hp}
+     e.dead=true;e.hp=0;kills++;bonusAtk+=s.killAtk;if(firstKill==null)firstKill=t+1;
+     if(s.thorn){const atk=atkNow(t);en.filter(o=>!o.dead).slice(0,8).forEach(o=>{const b=o.hp;hit(o,s.thorn*atk,1);splashDmg+=Math.max(0,b-Math.max(0,o.hp))});chain=true}}})}
+ }
+ return {names,total:primDmg+splashDmg,prim:primDmg,splash:splashDmg,kills,firstKill,skills,delayed:delayed/Math.max(1e-9,raw),flags:[...new Set(s.flags)]};
+}
+
+const pairs=a=>{const o=[];for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++)o.push([a[i],a[j]]);return o};
+
+// gold mode: 0 없음, 1 있음, 2 둘 다(평균)
+function evalMode(names,c){
+ if(gold===2){const a=evaluate(names,c,false),b=evaluate(names,c,true);return {...b,total:(a.total+b.total)/2,totA:a.total,totB:b.total}}
+ return evaluate(names,c,gold===1);
+}
+
+function run(){
+ const c=ctx();
+ $("baseStat").textContent=`Lv.${c.L} 기본: 공격력 ${c.bAtk} · HP ${c.bHp} · 연사 후속타 ${Math.round(c.follow*100)}% · 공격 범위 3칸`;
+ const P=[...pool],C=[...cand];
+ $("poolCnt").textContent=`${P.length}/8 선택`;
+ const res=$("res");res.innerHTML="";
+ const r1=$("r1").value,r2=$("r2").value;
+
+ if(tab==="solo"){
+  $("tabNote").textContent=`장비 1개만 단 쇠뇌가 ${c.T}턴 동안 넣는 총 피해예요. 조합 없이 장비 자체의 딜 기여만 비교할 때 보세요.`;
+  const xs=ITEMS.map(it=>({it,e:evalMode([it.n],c)})).sort((a,b)=>b.e.total-a.e.total);
+  const best=xs[0].e.total||1;
+  xs.forEach((x,i)=>{const d=card(i);
+   d.innerHTML=`<div class="rank">${i+1}</div><div class="items"><span class="it">${x.it.n}</span><span class="score">${(100*x.e.total/best).toFixed(0)}</span></div>${barsHTML(x.e,best,c)}`;
+   res.appendChild(d)});
+  return;
+ }
+ if(P.length<2){res.innerHTML='<p class="note">8개 풀에서 장비를 2개 이상 골라주세요.</p>';$("tabNote").textContent="";return}
+ if(C.length<2){res.innerHTML='<p class="note">내 후보를 2개 이상 골라주세요.</p>';$("tabNote").textContent="";return}
+ const rp=pairs(P), up=pairs(C);
+ const all=[];
+ rp.forEach(r=>up.forEach(u=>{if(u.includes(r[0])||u.includes(r[1]))return;all.push({r,u,e:evalMode([...r,...u],c)})}));
+ const maxT=Math.max(1e-9,...all.map(x=>x.e.total));
+ all.forEach(x=>x.s=100*x.e.total/maxT);
+
+ if(tab==="make"){
+  $("tabNote").textContent=`랜덤 ${rp.length}가지 경우를 전부 돌려서 평균 점수가 높은 순서예요. 최악은 가장 안 맞는 랜덤이 붙었을 때예요.`;
+  const agg=up.map(u=>{const xs=all.filter(x=>x.u===u);if(!xs.length)return null;
+   const avg=xs.reduce((a,x)=>a+x.s,0)/xs.length, tot=xs.reduce((a,x)=>a+x.e.total,0)/xs.length;
+   const worst=xs.reduce((a,x)=>x.s<a.s?x:a), best=xs.reduce((a,x)=>x.s>a.s?x:a);
+   return {u,avg,tot,worst,best}}).filter(Boolean).sort((a,b)=>b.avg-a.avg);
+  agg.slice(0,8).forEach((x,i)=>{const d=card(i);
+   d.innerHTML=`<div class="rank">${i+1}</div><div class="items">${x.u.map(n=>`<span class="it">${n}</span>`).join("")}<span class="score">평균 ${x.avg.toFixed(0)}</span></div>
+   <div class="sub">${c.T}턴 평균 총 피해 ${Math.round(x.tot).toLocaleString()}</div>
+   <div class="sub">최고 ${x.best.s.toFixed(0)}점 (${x.best.r.join(" + ")}) · 최악 ${x.worst.s.toFixed(0)}점 (${x.worst.r.join(" + ")})</div>`;
+   res.appendChild(d)});
+  return;
+ }
+ if(tab==="pool"){
+  $("tabNote").textContent="8개 중 어떤 2개가 붙으면 좋은지 순서예요. 각 줄은 그 2개에 내 후보 중 가장 잘 맞는 2개를 붙였을 때 기준이에요.";
+  const best=rp.map(r=>{const xs=all.filter(x=>x.r===r);return xs.length?xs.reduce((a,x)=>x.s>a.s?x:a):null}).filter(Boolean).sort((a,b)=>b.s-a.s);
+  const show=best.length>8?[...best.slice(0,5),null,...best.slice(-3)]:best;
+  show.forEach(x=>{if(!x){const h=document.createElement("h3");h.textContent="나오면 아쉬운 2개";res.appendChild(h);return}
+   res.appendChild(full(x,best.indexOf(x)+1,"pool",maxT,c))});
+  return;
+ }
+ if(r1===""||r2===""){$("tabNote").textContent="";res.innerHTML='<p class="note">위에서 "실제로 나온 랜덤" 2개를 고르면 지금 붙일 2개를 추천해요.</p>';return}
+ if(r1===r2){$("tabNote").textContent="";res.innerHTML='<p class="note">랜덤 2개는 중복이 안 나와요. 서로 다른 장비를 골라주세요.</p>';return}
+ $("tabNote").textContent=`${r1} + ${r2}에 붙일 2개 순서예요.`;
+ const xs=all.filter(x=>x.r.includes(r1)&&x.r.includes(r2)).sort((a,b)=>b.s-a.s);
+ if(!xs.length){res.innerHTML='<p class="note">랜덤과 겹치지 않는 후보가 2개 이상 있어야 해요.</p>';return}
+ xs.slice(0,8).forEach((x,i)=>res.appendChild(full(x,i+1,"now",maxT,c)));
+}
+
+function card(i){const d=document.createElement("div");d.className="card"+(i===0?" top":"");return d}
+function barsHTML(e,max,c){
+ const w=Math.max(3,Math.min(100,100*e.total/max)), pw=e.total>0?w*e.prim/e.total:0;
+ const txt=e.totA!=null?`없음 ${Math.round(e.totA)} / 있음 ${Math.round(e.totB)}`:`총 ${Math.round(e.total).toLocaleString()}`;
+ const extra=[`대상 ${Math.round(e.prim)} · 주변 ${Math.round(e.splash)}`,`처치 ${e.kills}명${e.firstKill?` (첫 처치 ${e.firstKill}턴)`:""}`,`연사 ${e.skills.toFixed(1)}번`];
+ if(gold>0&&e.delayed>0.005)extra.push(`금사슬로 늦게 들어간 피해 ${(e.delayed*100).toFixed(0)}%`);
+ return `<div class="bars"><span class="bar"><i style="width:${w.toFixed(1)}%;background:linear-gradient(90deg,var(--deal) ${(100*pw/w).toFixed(0)}%,var(--brass) 0)"></i></span><span class="v">${txt}</span></div>
+ <div class="flags">${e.flags.map(f=>`<span>${f}</span>`).join("")}<span style="color:var(--muted)">${extra.join(" · ")}</span></div>`;
+}
+function full(x,rank,mode,max,c){
+ const d=card(rank-1);
+ const it=x.r.map(n=>`<span class="it${mode==="pool"?" hl":" fixed"}">${n}</span>`).join("")+x.u.map(n=>`<span class="it${mode==="pool"?" fixed":""}">${n}</span>`).join("");
+ d.innerHTML=`<div class="rank">${rank}</div><div class="items">${it}<span class="score">${x.s.toFixed(0)}</span></div>${barsHTML(x.e,max,c)}`;
+ return d;
+}
+
+function chipGroups(box,list,set,opt){
+ box.innerHTML="";
+ const groups=[["재제작 성장형",list.filter(i=>i.ex)],...[1,3,5,7,12,14].map(l=>["대장간 Lv."+l,list.filter(i=>!i.ex&&i.lv===l)])];
+ groups.forEach(([t,arr])=>{
+  if(!arr.length)return;
+  const h=document.createElement("div");h.className="lv";h.textContent=t;box.appendChild(h);
+  const w=document.createElement("div");w.className="chips";
+  arr.forEach(it=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=it.n;
+   const on=set.has(it.n);b.setAttribute("aria-pressed",on?"true":"false");
+   if(opt.max&&!on&&set.size>=opt.max)b.disabled=true;
+   b.onclick=()=>{on?set.delete(it.n):set.add(it.n);refresh()};
+   w.appendChild(b)});
+  box.appendChild(w);
+ });
+}
+function fillRandom(){
+ ["r1","r2"].forEach(id=>{const s=$(id),cur=s.value;s.innerHTML='<option value="">아직 안 나옴</option>';
+  [...pool].forEach(n=>{const o=document.createElement("option");o.value=n;o.textContent=n;s.appendChild(o)});
+  s.value=pool.has(cur)?cur:""});
+}
+function refresh(){chipGroups($("pool"),POOL,pool,{max:8});chipGroups($("cands"),ITEMS,cand,{});fillRandom();run()}
+function setTab(t){tab=t;["make","pool","now","solo"].forEach(k=>$("t-"+k).setAttribute("aria-selected",k===t));run()}
+function setLv(l){lvl=l;[1,3,6].forEach(k=>$("lv"+k).setAttribute("aria-pressed",k===l));run()}
+[1,3,6].forEach(k=>$("lv"+k).onclick=()=>setLv(k));
+function setMx(m){melee2=m;$("mx0").setAttribute("aria-pressed",!m);$("mx1").setAttribute("aria-pressed",m);run()}
+$("mx0").onclick=()=>setMx(false);$("mx1").onclick=()=>setMx(true);
+function setHp(v){$("H").value=v;syncHp()}
+function syncHp(){const h=$("H").value;$("hp0").setAttribute("aria-pressed",h==="700");$("hp1").setAttribute("aria-pressed",h==="1100");run()}
+$("hp0").onclick=()=>setHp(700);$("hp1").onclick=()=>setHp(1100);$("H").addEventListener("input",syncHp);
+function setGold(g){gold=g;[0,1,2].forEach(k=>$("gc"+k).setAttribute("aria-pressed",k===g));run()}
+["make","pool","now","solo"].forEach(k=>$("t-"+k).onclick=()=>setTab(k));
+[0,1,2].forEach(k=>$("gc"+k).onclick=()=>setGold(k));
+$("allBtn").onclick=()=>{cand=new Set(ITEMS.map(i=>i.n));refresh()};
+$("clrBtn").onclick=()=>{cand.clear();refresh()};
+document.querySelectorAll("input,select").forEach(el=>el.addEventListener("input",()=>{
+ if((el.id==="r1"||el.id==="r2")&&$("r1").value&&$("r2").value)setTab("now");else run()}));
+refresh();
+</script>
+
+</body>
+</html>
